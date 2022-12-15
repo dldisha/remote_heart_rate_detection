@@ -3,6 +3,10 @@ import sys
 import numpy as np
 import cv2
 
+#face detection
+cascPath = "face_detection.xml"
+faceCascade = cv2.CascadeClassifier(cascPath)
+
 #import python files modules
 import helper_fn
 
@@ -11,18 +15,18 @@ camera = None
 camera = cv2.VideoCapture(0) #read the video
 
 #Webcam parameters   
-total_width = 320
-total_height = 240
-video_width = 160
-video_height = 120
+total_width = 640
+total_height = 480
+video_width = 320
+video_height = 240
 channels = 3
 frame_rate = 15
 
 #Setting video frame
-camera.set(6, total_width)
-camera.set(8, total_height)
-camera.set(10, video_width)
-camera.set(8, video_height)
+camera.set(2, total_width)
+camera.set(3, total_height)
+# camera.set(10, video_width)
+# camera.set(8, video_height)
 
 #Color Magnification Parameters
 levels = 3
@@ -63,70 +67,101 @@ fourier_transform_avg = np.zeros((buffer_size))
 frequencies = (1.0*frame_rate) * np.arange(buffer_size) / (1.0*buffer_size)
 mask = (frequencies >= min_frequency) & (frequencies <= max_frequency)
 
-#ALGO
+
+### EULERIAN VIDEO MAGNIFICATION ALGORITHM ###
+
 i = 0
+HR = []
 
 while (True):
     init, frame = camera.read()
     #frame = cv2.resize(frame, (600, 400))
+
+    #face detection
+    convert_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    face_detect = faceCascade.detectMultiScale(
+        convert_gray,
+        scaleFactor=1.1,
+        minNeighbors=5,
+        minSize=(30, 30),
+        flags=cv2.CASCADE_SCALE_IMAGE
+    )
+
     if init == False:
         break
 
-    detection_frame = frame[video_height//2:total_height - video_height//2, video_width//2:total_width - video_width//2, :]
+    if len(face_detect) > 0:  ##face detected
+        detection_frame = frame[video_height//2:total_height - video_height//2, video_width//2:total_width - video_width//2, :]
 
-    #Construct Gaussian pyramid
-    gaussian_video[buffer_index] = helper_fn.create_gaussian_pyramid(detection_frame, levels+1)[levels]
-    fourier_transform = np.fft.fft(gaussian_video, axis=0)
+        #Construct Gaussian pyramid
+        gaussian_video[buffer_index] = helper_fn.create_gaussian_pyramid(detection_frame, levels+1)[levels]
+        fourier_transform = np.fft.fft(gaussian_video, axis=0)
 
-    #Bandpass filter
-    fourier_transform[mask == False] = 0
+        #Bandpass filter
+        fourier_transform[mask == False] = 0
 
-    #Grab a pulse
-    if buffer_index % bpm_frequency == 0:
+        #Grab a pulse
+        if buffer_index % bpm_frequency == 0:
+            i += 1
 
-        i += 1
+            for buffer in range(buffer_size):
+                fourier_transform_avg[buffer] = np.real(fourier_transform[buffer]).mean()
+            
+            hz = frequencies[np.argmax(fourier_transform_avg)]
+            bpm = 60.0 * hz
+            bpm_buffer[bpm_buffer_index] = bpm
+            bpm_buffer_index = (bpm_buffer_index + 1) % bpm_buffer_size
 
-        for buffer in range(buffer_size):
-            fourier_transform_avg[buffer] = np.real(fourier_transform[buffer]).mean()
+        #Amplify
+        filtered = np.real(np.fft.ifft(fourier_transform, axis=0))
+        filtered = filtered * alpha
+
+        #Reconstruct resulting frame
+        filtered_frame = helper_fn.reconstruction(filtered, buffer_index, levels, video_height, video_width)
+        output_frame = detection_frame + filtered_frame
+        output_frame = cv2.convertScaleAbs(output_frame)
+
+        buffer_index = (buffer_index + 1) % buffer_size
+
+        frame[video_height//2:total_height-video_height//2, video_width//2:total_width-video_width//2, :] = output_frame
+        cv2.rectangle(frame, (video_width//2 , video_height//2), (total_width-video_width//2, total_height-video_height//2), box_color, box_weight)
         
-        hz = frequencies[np.argmax(fourier_transform_avg)]
-        bpm = 60.0 * hz
-        bpm_buffer[bpm_buffer_index] = bpm
-        bpm_buffer_index = (bpm_buffer_index + 1) % bpm_buffer_size
+        if i > bpm_buffer_size:
+            cv2.putText(frame, "BPM: %d" % bpm_buffer.mean(), HR_text_location, font_style, font_scale, font_color)
+            HR.append(bpm_buffer.mean())
+            #print("BPM: %d" % bpm_buffer.mean())
+        else:
+            cv2.putText(frame, "Measuring Heart Rate...", init_text_location, font_style, font_scale, font_color)
 
-    #Amplify
-    filtered = np.real(np.fft.ifft(fourier_transform, axis=0))
-    filtered = filtered * alpha
+        output_writer.write(frame)
 
-    #Reconstruct resulting frame
-    filtered_frame = helper_fn.reconstruction(filtered, buffer_index, levels, video_height, video_width)
-    output_frame = detection_frame + filtered_frame
-    output_frame = cv2.convertScaleAbs(output_frame)
+        if len(sys.argv) != 2:
+            cv2.imshow("Contactless Heart Rate Monitor", frame)
 
-    buffer_index = (buffer_index + 1) % buffer_size
-
-    frame[video_height//2:total_height-video_height//2, video_width//2:total_width-video_width//2, :] = output_frame
-    cv2.rectangle(frame, (video_width//2 , video_height//2), (total_width-video_width//2, total_height-video_height//2), box_color, box_weight)
-    
-    if i > bpm_buffer_size:
-        cv2.putText(frame, "BPM: %d" % bpm_buffer.mean(), HR_text_location, font_style, font_scale, font_color)
+            #Exit if Key Q is pressed
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+            #Exit if Esc is pressed
+            if cv2.waitKey(1) & 0xFF == 27:
+                break
     else:
-        cv2.putText(frame, "Measuring Heart Rate...", init_text_location, font_style, font_scale, font_color)
-
-    output_writer.write(frame)
-
-    if len(sys.argv) != 2:
-        cv2.imshow("Contactless Heart Rate Monitor", frame)
-
-        #Exit if Key Q is pressed
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-        #Exit if Esc is pressed
-        if cv2.waitKey(1) & 0xFF == 27:
-            break
+        cv2.putText(frame, "No face detected", init_text_location, font_style, font_scale, font_color)
+        output_writer.write(frame)
+        
+        if len(sys.argv) != 2:
+            cv2.imshow("Contactless Heart Rate Monitor", frame)
+            
+            #Exit if Key Q is pressed
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+            #Exit if Esc is pressed
+            if cv2.waitKey(1) & 0xFF == 27:
+                break
 
 camera.release()
 cv2.destroyAllWindows()
 output_writer.release()
 
-
+print("Average Heart rate:", sum(HR[:20])/20)
+hr=sum(HR[:20])/20
