@@ -8,7 +8,7 @@ cascPath = "face_detection.xml"
 #loading the cascade
 faceCascade = cv2.CascadeClassifier(cascPath)
 
-#import python files modules
+#import python file modules
 import helper_fn
 
 #Show Webcam 
@@ -194,6 +194,6 @@ cv2.destroyAllWindows()
 #Note: it rewrites the output file on every program run
 output_writer.release()
 
-#Average of first 30 buffers
+#Average of the first 30 buffers
 print("Average Heart rate:", sum(HR[:30])/30)
 hr = sum(HR[:30])/30
