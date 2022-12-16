@@ -9,7 +9,7 @@ cascPath = "face_detection.xml"
 faceCascade = cv2.CascadeClassifier(cascPath)
 
 #import python file modules
-import helper_fn
+import helper
 
 #Show Webcam 
 camera = None
@@ -62,7 +62,7 @@ output_writer.open(output_file, cv2.VideoWriter_fourcc('j', 'p', 'e', 'g'), fram
 #Initializing the Gaussian Pyramid
 first_frame = np.zeros((video_height, video_width, channels))
 #Getting the first level
-first_gaussian_pyramid = helper_fn.create_gaussian_pyramid(first_frame, levels+1)[levels]
+first_gaussian_pyramid = helper.create_gaussian_pyramid(first_frame, levels+1)[levels]
 gaussian_video = np.zeros((buffer_size, first_gaussian_pyramid.shape[0], first_gaussian_pyramid.shape[1], channels))
 #Taking Fourier Transform Average
 fourier_transform_avg = np.zeros((buffer_size))
@@ -107,7 +107,7 @@ while (True):
 
         #Constructing the Gaussian pyramid
         #Broadcasting input array shape
-        gaussian_video[buffer_index] = helper_fn.create_gaussian_pyramid(detection_frame, levels+1)[levels]
+        gaussian_video[buffer_index] = helper.create_gaussian_pyramid(detection_frame, levels+1)[levels]
         #Transforming gaussian video using FFT
         fourier_transform = np.fft.fft(gaussian_video, axis=0)
 
@@ -133,7 +133,7 @@ while (True):
         filtered = filtered * alpha
 
         #Reconstructing the resulting frame
-        filtered_frame = helper_fn.reconstruction(filtered, buffer_index, levels, video_height, video_width)
+        filtered_frame = helper.reconstruction(filtered, buffer_index, levels, video_height, video_width)
         #Combing the detected and filtered frame 
         output_frame = detection_frame + filtered_frame
         output_frame = cv2.convertScaleAbs(output_frame)
