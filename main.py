@@ -1,5 +1,4 @@
 # Importing libraries
-import helper
 import sys
 import numpy as np
 import cv2
@@ -10,6 +9,7 @@ cascPath = "face_detection.xml"
 faceCascade = cv2.CascadeClassifier(cascPath)
 
 # import python file modules
+import helper
 
 # Show Webcam
 camera = None
@@ -62,11 +62,13 @@ output_writer.open(output_file, cv2.VideoWriter_fourcc(
 
 # Initializing the Gaussian Pyramid
 first_frame = np.zeros((video_height, video_width, channels))
+
 # Getting the first level
 first_gaussian_pyramid = helper.create_gaussian_pyramid(
     first_frame, levels+1)[levels]
 gaussian_video = np.zeros(
     (buffer_size, first_gaussian_pyramid.shape[0], first_gaussian_pyramid.shape[1], channels))
+    
 # Taking Fourier Transform Average
 fourier_transform_avg = np.zeros((buffer_size))
 
@@ -75,7 +77,7 @@ frequencies = (1.0*frame_rate) * np.arange(buffer_size) / (1.0*buffer_size)
 # Masking the special frequencies
 mask = (frequencies >= min_frequency) & (frequencies <= max_frequency)
 
-####### EULERIAN VIDEO MAGNIFICATION ALGORITHM #######
+                                            ####### EULERIAN VIDEO MAGNIFICATION ALGORITHM #######
 
 i = 0
 HR = []
@@ -128,6 +130,7 @@ while (True):
 
             # Getting frequency in Hertz
             hz = frequencies[np.argmax(fourier_transform_avg)]
+
             # Calculating Heart Rate in Hz
             bpm = 60.0 * hz
             bpm_buffer[bpm_buffer_index] = bpm
@@ -140,6 +143,7 @@ while (True):
         # Reconstructing the resulting frame
         filtered_frame = helper.reconstruction(
             filtered, buffer_index, levels, video_height, video_width)
+
         # Combing the detected and filtered frame
         output_frame = detection_frame + filtered_frame
         output_frame = cv2.convertScaleAbs(output_frame)
@@ -199,8 +203,10 @@ while (True):
 
 # Release the Camera object
 camera.release()
+
 # Destroy all windows when Esc or Q pressed
 cv2.destroyAllWindows()
+
 # Save the output video into the folder
 # Note: it rewrites the output file on every program run
 output_writer.release()
